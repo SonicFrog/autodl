@@ -33,7 +33,7 @@ class TransmissionDownloader(Downloader):
 
         resp = requests.post(self.url)
 
-        if resp.status_code is 409:
+        if resp.status_code == 409:
             self.csrf = resp.headers['X-Transmission-Session-Id']
 
     def add_torrent(self, torrent):
@@ -48,18 +48,37 @@ class TransmissionDownloader(Downloader):
         return self.__raw_torrent(content)
 
     def __post_tr_req(self, payload):
+        print self.csrf
         headers = {'X-Transmission-Session-Id': self.csrf}
-        return requests.post(self.url, data=payload, headers=headers)
+
+        resp = requests.post(self.url, data=json.dumps(payload), headers=headers)
+        if resp.status_code != 200:
+            raise ValueError("Bad response from torrent client")
+
+        jresp = json.loads(resp.content)
+        if jresp['result'] != 'success':
+            raise ValueError("Request failed %s" % jresp['result'])
 
     def __raw_torrent(self, content):
         return self.__post_torrent(self, b64encode(content))
 
     def __post_torrent(self, torrent):
         req = {
-            'metainfo': torrent,
-            'paused': False
+            'arguments': {
+                'metainfo': torrent,
+                'paused': False,
+            },
+            'method': 'torrent-add',
         }
         return self.__post_tr_req(req)
 
     def add_magnet(self, magnet):
-        raise ValueError("Unimplemented")
+        req = {
+            'arguments': {
+                'filename': magnet,
+                'paused': False,
+            },
+            'method': 'torrent-add',
+        }
+
+        return self.__post_tr_req(req)
